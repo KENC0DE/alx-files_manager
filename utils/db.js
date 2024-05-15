@@ -1,8 +1,6 @@
 import { MongoClient } from 'mongodb';
-// import { MongoClient } from 'mongodb/lib/mongo_client';
 
 class DBClient {
-  // A class with basic connection to a mongodb server
   constructor() {
     const host = process.env.DB_HOST || 'localhost';
     const port = process.env.DB_PORT || 27017;
@@ -15,7 +13,6 @@ class DBClient {
     this.db = client.db(database);
   }
 
-  // checks if the mongoddb is connected
   isAlive() {
     return this.client.topology.isConnected();
   }
