@@ -1,23 +1,9 @@
-import {
-  createHash,
-} from 'crypto';
-import {
-  v4 as uuidv4,
-} from 'uuid';
+import { createHash } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
-/**
- * @class UsersController
- * @description This class handles all authorization related requests
- */
 class Authorization {
-  /**
-   * @param {object} req
-   * @param {object} res
-   * @returns {object} user
-   * @description This method creates a new user
-   */
   static async getConnect(req, res) {
     const authToken = req.header('Authorization') || null;
     if (!authToken) {
@@ -55,12 +41,6 @@ class Authorization {
     }
   }
 
-  /**
-   * @param {object} req
-   * @param {object} res
-   * @returns {object} user
-   * @description This method creates a new user
-   */
   static async getDisconnect(req, res) {
     let authToken = req.header('X-Token') || null;
     if (!authToken) {

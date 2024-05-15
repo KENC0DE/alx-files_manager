@@ -1,9 +1,5 @@
-import {
-  MongoClient,
-} from 'mongodb';
-import {
-  env,
-} from 'process';
+import { MongoClient } from 'mongodb';
+import { env } from 'process';
 
 class DBClient {
   constructor() {
