@@ -1,70 +1,104 @@
-import sha1 from 'sha1';
-import Queue from 'bull';
-import { findUserById, findUserIdByToken } from '../utils/helpers';
+import {
+  createHash,
+} from 'crypto';
+import {
+  ObjectId,
+} from 'mongodb';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
-const userQueue = new Queue('userQueue');
-
+/**
+ * @class UsersController
+ * @description This class handles all authorization related requests
+ */
 class UsersController {
   /**
-   * Creates a user using email and password
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} user
+   * @memberof UsersController
+   * @description This method creates a new user
    */
-  static async postNew(request, response) {
-    const { email, password } = request.body;
-
-    // check for email and password
-    if (!email) return response.status(400).send({ error: 'Missing email' });
-    if (!password) return response.status(400).send({ error: 'Missing password' });
-
-    // check if the email already exists in DB
-    const emailExists = await dbClient.users.findOne({ email });
-    if (emailExists) return response.status(400).send({ error: 'Already exist' });
-
-    // Insert new user
-    const sha1Password = sha1(password);
-    let result;
-    try {
-      result = await dbClient.users.insertOne({
-        email, password: sha1Password,
+  static async postNew(req, res) {
+    const {
+      email,
+      password,
+    } = req.body;
+    if (!email) {
+      res.status(400).send({
+        error: 'Missing email',
       });
-    } catch (err) {
-      await userQueue.add({});
-      return response.status(500).send({ error: 'Error creating user' });
+      return;
+    }
+    if (!password) {
+      res.status(400).send({
+        error: 'Missing password',
+      });
+      return;
+    }
+    const users = dbClient.db.collection('users');
+
+    // Check if user already exists
+    const user = await users.findOne({
+      email,
+    });
+    if (user) {
+      res.status(400).send({
+        error: 'Already exist',
+      });
+      return;
     }
 
-    const user = {
-      id: result.insertedId,
+    // Add new user
+    const hash = createHash('sha1').update(password).digest('hex');
+    const newUser = await users.insertOne({
+      email,
+      password: hash,
+    });
+    const json = {
+      id: newUser.insertedId,
       email,
     };
-
-    await userQueue.add({
-      userId: result.insertedId.toString(),
-    });
-
-    return response.status(201).send(user);
+    res.status(201).send(json);
   }
 
   /**
-   * Should retrieve the user base on the token used
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} user
+   * @description This method retrieves user data based on user based token
    */
-  static async getMe(request, response) {
-    const token = request.headers['x-token'];
-    if (!token) { return response.status(401).json({ error: 'Unauthorized' }); }
-
-    // Retrieve the user based on the token
-    const userId = await findUserIdByToken(request);
-    if (!userId) return response.status(401).send({ error: 'Unauthorized' });
-
-    const user = await findUserById(userId);
-
-    if (!user) return response.status(401).send({ error: 'Unauthorized' });
-
-    const processedUser = { id: user._id, ...user };
-    delete processedUser._id;
-    delete processedUser.password;
-    // Return the user object (email and id only)
-    return response.status(200).send(processedUser);
+  static async getMe(req, res) {
+    const authToken = req.header('X-Token') || null;
+    if (!authToken) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
+    const token = `auth_${authToken}`;
+    const user = await redisClient.get(token);
+    if (!user) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
+    const users = dbClient.db.collection('users');
+    const userDoc = await users.findOne({
+      _id: ObjectId(user),
+    });
+    if (userDoc) {
+      res.status(200).send({
+        id: user,
+        email: userDoc.email,
+      });
+    } else {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+    }
   }
 }
 
-module.exports = UsersController;
+export default UsersController;
